@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "someone_was_here",
+  "version": "${version}",
+  "name": "Someone Was Here",
+  "description": "Client-side psychological horror for Minecraft.",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.someonewashere.client.SomeoneWasHereClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
