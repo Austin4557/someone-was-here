@@ -12,6 +12,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.TorchBlock;
+import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.Vec3;
@@ -32,12 +34,23 @@ public final class SomeoneWasHereClient implements ClientModInitializer {
 
     static final class PresenceDirector {
         private int quietTicks = 20 * 75;
+        private BlockPos darkenedTorch;
+        private BlockState darkenedTorchState;
+        private int restoreTorchTicks;
 
         void reset() {
             quietTicks = 20 * 75;
+            darkenedTorch = null;
+            darkenedTorchState = null;
+            restoreTorchTicks = 0;
         }
 
         void tick(Minecraft client) {
+            if (restoreTorchTicks > 0 && --restoreTorchTicks == 0 && darkenedTorch != null && darkenedTorchState != null) {
+                client.level.setBlock(darkenedTorch, darkenedTorchState, 2);
+                darkenedTorch = null;
+                darkenedTorchState = null;
+            }
             if (--quietTicks > 0) return;
 
             ThreadLocalRandom rng = ThreadLocalRandom.current();
@@ -67,10 +80,16 @@ public final class SomeoneWasHereClient implements ClientModInitializer {
         }
 
         private boolean tryTorchEvent(Minecraft client, ThreadLocalRandom rng) {
-            List<BlockPos> torches = nearby(client, 8, state -> state.is(net.minecraft.tags.BlockTags.WALL_POST_OVERRIDE));
+            List<BlockPos> torches = nearby(client, 8, state ->
+                    state.getBlock() instanceof TorchBlock || state.getBlock() instanceof WallTorchBlock);
             if (torches.isEmpty()) return false;
             BlockPos pos = torches.get(rng.nextInt(torches.size()));
-            // No block replacement: sell the illusion with a tiny extinguish cue near an existing light source.
+            BlockState original = client.level.getBlockState(pos);
+            darkenedTorch = pos.immutable();
+            darkenedTorchState = original;
+            restoreTorchTicks = rng.nextInt(20 * 3, 20 * 7);
+            // Client-only temporary replacement. The authoritative world state is not saved by this effect.
+            client.level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2);
             client.level.playLocalSound(pos, SoundEvents.FIRE_EXTINGUISH, SoundSource.AMBIENT,
                     0.18F, 0.72F + rng.nextFloat() * 0.18F, false);
             return true;
