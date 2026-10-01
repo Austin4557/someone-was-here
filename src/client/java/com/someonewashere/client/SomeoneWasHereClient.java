@@ -3,6 +3,8 @@ package com.someonewashere.client;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import net.fabricmc.api.ClientModInitializer;
@@ -37,15 +39,24 @@ public final class SomeoneWasHereClient implements ClientModInitializer {
         private BlockPos darkenedTorch;
         private BlockState darkenedTorchState;
         private int restoreTorchTicks;
+        private int evidenceTicks = 20 * 300;
+        private final Set<Long> visitedCells = new HashSet<>();
 
         void reset() {
             quietTicks = 20 * 75;
             darkenedTorch = null;
             darkenedTorchState = null;
             restoreTorchTicks = 0;
+            evidenceTicks = 20 * 300;
+            visitedCells.clear();
         }
 
         void tick(Minecraft client) {
+            rememberVisitedArea(client);
+            if (--evidenceTicks <= 0) {
+                subtleEvidenceCue(client, ThreadLocalRandom.current());
+                evidenceTicks = ThreadLocalRandom.current().nextInt(20 * 300, 20 * 721);
+            }
             if (restoreTorchTicks > 0 && --restoreTorchTicks == 0 && darkenedTorch != null && darkenedTorchState != null) {
                 client.level.setBlock(darkenedTorch, darkenedTorchState, 2);
                 darkenedTorch = null;
@@ -124,6 +135,26 @@ public final class SomeoneWasHereClient implements ClientModInitializer {
                     rng.nextBoolean() ? SoundEvents.CHEST_OPEN : SoundEvents.CHEST_CLOSE,
                     SoundSource.BLOCKS, 0.42F, 0.88F + rng.nextFloat() * 0.16F, false);
             return true;
+        }
+
+        private void rememberVisitedArea(Minecraft client) {
+            BlockPos p = client.player.blockPosition();
+            long cellX = Math.floorDiv(p.getX(), 16);
+            long cellZ = Math.floorDiv(p.getZ(), 16);
+            visitedCells.add((cellX << 32) ^ (cellZ & 0xffffffffL));
+        }
+
+        private void subtleEvidenceCue(Minecraft client, ThreadLocalRandom rng) {
+            Vec3 p = client.player.position();
+            double angle = rng.nextDouble(Math.PI * 2.0);
+            double distance = rng.nextDouble(7.0, 13.0);
+            // A single, distant placement-like sound: enough to suggest activity, with no world mutation.
+            client.level.playLocalSound(
+                    p.x + Math.sin(angle) * distance,
+                    p.y + rng.nextDouble(-2.0, 2.0),
+                    p.z + Math.cos(angle) * distance,
+                    SoundEvents.WOOD_PLACE, SoundSource.BLOCKS,
+                    0.22F, 0.76F + rng.nextFloat() * 0.18F, false);
         }
 
         private List<BlockPos> nearby(Minecraft client, int radius, java.util.function.Predicate<BlockState> predicate) {
