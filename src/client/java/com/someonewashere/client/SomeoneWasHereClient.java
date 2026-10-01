@@ -42,9 +42,10 @@ public final class SomeoneWasHereClient implements ClientModInitializer {
 
             ThreadLocalRandom rng = ThreadLocalRandom.current();
             int roll = rng.nextInt(100);
-            boolean happened = roll < 42 ? tryDoorEvent(client, rng)
-                    : roll < 72 ? tryTorchEvent(client, rng)
-                    : phantomContainerEvent(client, rng);
+            boolean happened = roll < 34 ? tryDoorEvent(client, rng)
+                    : roll < 58 ? tryTorchEvent(client, rng)
+                    : roll < 78 ? phantomContainerEvent(client, rng)
+                    : footstepsAboveEvent(client, rng);
 
             // Failed searches stay quiet too. The mod should never feel scheduled.
             quietTicks = happened
@@ -72,6 +73,25 @@ public final class SomeoneWasHereClient implements ClientModInitializer {
             // No block replacement: sell the illusion with a tiny extinguish cue near an existing light source.
             client.level.playLocalSound(pos, SoundEvents.FIRE_EXTINGUISH, SoundSource.AMBIENT,
                     0.18F, 0.72F + rng.nextFloat() * 0.18F, false);
+            return true;
+        }
+
+        private boolean footstepsAboveEvent(Minecraft client, ThreadLocalRandom rng) {
+            Vec3 p = client.player.position();
+            double angle = rng.nextDouble(Math.PI * 2.0);
+            double lateral = rng.nextDouble(1.5, 4.5);
+            int steps = rng.nextInt(3, 7);
+            double dx = Math.sin(angle);
+            double dz = Math.cos(angle);
+            for (int i = 0; i < steps; i++) {
+                double stride = (i - (steps - 1) * 0.5) * 0.72;
+                client.level.playLocalSound(
+                        p.x + dx * lateral + dz * stride,
+                        p.y + rng.nextDouble(3.0, 5.5),
+                        p.z + dz * lateral - dx * stride,
+                        SoundEvents.WOOD_STEP, SoundSource.AMBIENT,
+                        0.34F, 0.82F + rng.nextFloat() * 0.16F, false);
+            }
             return true;
         }
 
