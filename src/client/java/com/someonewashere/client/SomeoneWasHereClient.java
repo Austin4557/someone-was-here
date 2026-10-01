@@ -41,6 +41,9 @@ public final class SomeoneWasHereClient implements ClientModInitializer {
         private int restoreTorchTicks;
         private int evidenceTicks = 20 * 300;
         private final Set<Long> visitedCells = new HashSet<>();
+        private BlockPos evidenceTorch;
+        private BlockState evidenceOriginal;
+        private int evidenceRestoreTicks;
 
         void reset() {
             quietTicks = 20 * 75;
@@ -49,12 +52,21 @@ public final class SomeoneWasHereClient implements ClientModInitializer {
             restoreTorchTicks = 0;
             evidenceTicks = 20 * 300;
             visitedCells.clear();
+            evidenceTorch = null;
+            evidenceOriginal = null;
+            evidenceRestoreTicks = 0;
         }
 
         void tick(Minecraft client) {
             rememberVisitedArea(client);
+            if (evidenceRestoreTicks > 0 && --evidenceRestoreTicks == 0 && evidenceTorch != null && evidenceOriginal != null) {
+                client.level.setBlock(evidenceTorch, evidenceOriginal, 2);
+                evidenceTorch = null;
+                evidenceOriginal = null;
+            }
             if (--evidenceTicks <= 0) {
-                subtleEvidenceCue(client, ThreadLocalRandom.current());
+                ThreadLocalRandom evidenceRng = ThreadLocalRandom.current();
+                if (!tryUnvisitedTorchEvidence(client, evidenceRng)) subtleEvidenceCue(client, evidenceRng);
                 evidenceTicks = ThreadLocalRandom.current().nextInt(20 * 300, 20 * 721);
             }
             if (restoreTorchTicks > 0 && --restoreTorchTicks == 0 && darkenedTorch != null && darkenedTorchState != null) {
@@ -142,6 +154,31 @@ public final class SomeoneWasHereClient implements ClientModInitializer {
             long cellX = Math.floorDiv(p.getX(), 16);
             long cellZ = Math.floorDiv(p.getZ(), 16);
             visitedCells.add((cellX << 32) ^ (cellZ & 0xffffffffL));
+        }
+
+        private boolean tryUnvisitedTorchEvidence(Minecraft client, ThreadLocalRandom rng) {
+            BlockPos origin = client.player.blockPosition();
+            List<BlockPos> candidates = new ArrayList<>();
+            for (int attempt = 0; attempt < 28; attempt++) {
+                int dx = rng.nextInt(-40, 41);
+                int dz = rng.nextInt(-40, 41);
+                if (Math.abs(dx) < 18 && Math.abs(dz) < 18) continue;
+                BlockPos probe = origin.offset(dx, rng.nextInt(-10, 7), dz);
+                long cellX = Math.floorDiv(probe.getX(), 16);
+                long cellZ = Math.floorDiv(probe.getZ(), 16);
+                long key = (cellX << 32) ^ (cellZ & 0xffffffffL);
+                if (visitedCells.contains(key)) continue;
+                BlockState at = client.level.getBlockState(probe);
+                BlockState below = client.level.getBlockState(probe.below());
+                if (at.isAir() && !below.isAir()) candidates.add(probe.immutable());
+            }
+            if (candidates.isEmpty()) return false;
+            BlockPos pos = candidates.get(rng.nextInt(candidates.size()));
+            evidenceTorch = pos;
+            evidenceOriginal = client.level.getBlockState(pos);
+            evidenceRestoreTicks = rng.nextInt(20 * 45, 20 * 121);
+            client.level.setBlock(pos, net.minecraft.world.level.block.Blocks.TORCH.defaultBlockState(), 2);
+            return true;
         }
 
         private void subtleEvidenceCue(Minecraft client, ThreadLocalRandom rng) {
